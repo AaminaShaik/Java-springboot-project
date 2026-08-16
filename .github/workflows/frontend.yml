@@ -19,6 +19,18 @@ jobs:
       # SonarQube Scan
       #####################################################
 
+      # 2. Authenticate to AWS using GitHub OIDC 
+      - name: Configure AWS Credentials 
+        uses: aws-actions/configure-aws-credentials@v6 
+        with:
+            role-to-assume: arn:aws:iam::381491825192:role/oidc-role 
+            aws-region: us-east-1 
+            audience: sts.amazonaws.com
+      # 3. Verify AWS identity 
+      - name: Verify AWS Identity 
+        run: | 
+          aws sts get-caller-identity
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -50,12 +62,28 @@ jobs:
       # Deploy
       #####################################################
 
+         # 4. Deploy to private EC2 through Bastion 
+      - name: Deploy Application 
+        uses: appleboy/ssh-action@v1.2.0 
+        with:
+          # Private EC2 
+          host: ${{ secrets.PRIVATE_EC2_HOST }} 
+          username: ec2-user 
+          key: ${{ secrets.PRIVATE_EC2_KEY }} 
+          port: 22
+
+          # Bastion / Jump Host 
+          proxy_host: ${{ secrets.BASTION_HOST }} 
+          proxy_username: ec2-user 
+          proxy_key: ${{ secrets.BASTION_KEY }} 
+          proxy_port: 22
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.1.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
           script: |
             set -e
 
@@ -153,7 +181,7 @@ jobs:
             Quality Gate       : Passed
 
             Deployment Target  : EC2
-            Frontend URL       : http://${{ secrets.EC2_HOST }}:8501
+            Frontend URL       : http://${{ secrets.PRIVATE_EC2_HOST }}:8501
 
             Regards,
             GitHub Actions
