@@ -61,15 +61,23 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # - name: Prepare EC2
-      #   uses: appleboy/ssh-action@v1.1.0
-      #   with:
-      #     host: ${{ secrets.EC2_HOST }}
-      #     username: ec2-user
-      #     key: ${{ secrets.EC2_KEY }}
-      #     script: |
-      #       set -e
-      #       sudo yum install -y git maven java-17-amazon-corretto
+      - name: Prepare EC2
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
+          port: 22
+
+           # Bastion / Jump Host 
+          proxy_host: ${{ secrets.BASTION_HOST }} 
+          proxy_username: ec2-user 
+          proxy_key: ${{ secrets.BASTION_KEY }} 
+          proxy_port: 22
+          
+          script: |
+            set -e
+            sudo yum install -y git maven java-17-amazon-corretto
 
       # 4. Deploy to private EC2 through Bastion 
       - name: Deploy Application 
