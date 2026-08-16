@@ -6,6 +6,10 @@ on:
   #     - main
 
   workflow_dispatch:
+    # Required for GitHub OIDC 
+permissions: 
+    id-token: write 
+    contents: read
 
 jobs:
   deploy:
@@ -84,6 +88,14 @@ jobs:
           host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.PRIVATE_EC2_KEY }}
+          port: 22
+
+          # Bastion / Jump Host 
+          proxy_host: ${{ secrets.BASTION_HOST }} 
+          proxy_username: ec2-user 
+          proxy_key: ${{ secrets.BASTION_KEY }} 
+          proxy_port: 22
+          
           script: |
             set -e
 
