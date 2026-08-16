@@ -14,6 +14,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+        # 2. Authenticate to AWS using GitHub OIDC 
+      - name: Configure AWS Credentials 
+        uses: aws-actions/configure-aws-credentials@v6 
+        with: 
+          role-to-assume: arn:aws:iam::975050258427:role/oidc-role 
+          aws-region: us-east-1 
+          audience: sts.amazonaws.com
+
+          # 3. Verify AWS identity 
+      - name: Verify AWS Identity 
+        run: | 
+          aws sts get-caller-identity
+          
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -42,22 +56,39 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Prepare EC2
-        uses: appleboy/ssh-action@v1.1.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
-          script: |
-            set -e
-            sudo yum install -y git maven java-17-amazon-corretto
+      # - name: Prepare EC2
+      #   uses: appleboy/ssh-action@v1.1.0
+      #   with:
+      #     host: ${{ secrets.EC2_HOST }}
+      #     username: ec2-user
+      #     key: ${{ secrets.EC2_KEY }}
+      #     script: |
+      #       set -e
+      #       sudo yum install -y git maven java-17-amazon-corretto
+
+      # 4. Deploy to private EC2 through Bastion 
+      - name: Deploy Application 
+        uses: appleboy/ssh-action@v1.2.0 
+        with: 
+        # Private EC2 
+          host: ${{ secrets.PRIVATE_EC2_HOST }} 
+          username: ec2-user 
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
+          port: 22
+
+          # Bastion / Jump Host 
+          proxy_host: ${{ secrets.BASTION_HOST }} 
+          proxy_username: ec2-user 
+          proxy_key: ${{ secrets.BASTION_KEY }} 
+          proxy_port: 22
+          
 
       - name: Clone / Pull Repository
         uses: appleboy/ssh-action@v1.1.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
           script: |
             set -e
             APP_DIR=/home/ec2-user/app
@@ -77,9 +108,9 @@ jobs:
       - name: Build Maven Application
         uses: appleboy/ssh-action@v1.1.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
           script: |
             cd /home/ec2-user/app/Java-springboot-project/backend
             mvn clean package -DskipTests -U
@@ -87,9 +118,9 @@ jobs:
       - name: Stop Old Application
         uses: appleboy/ssh-action@v1.1.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
           script_stop: false
           script: |
             PID=$(ps -ef | grep '[d]atastore-0.0.7.jar' | awk '{print $2}')
@@ -113,9 +144,9 @@ jobs:
       - name: Start Application
         uses: appleboy/ssh-action@v1.1.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
           script: |
             LOG_DIR=/var/log/app
             sudo mkdir -p $LOG_DIR
@@ -133,17 +164,17 @@ jobs:
       - name: Wait for App Startup
         uses: appleboy/ssh-action@v1.1.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
           script: sleep 15
 
       - name: Verify Application
         uses: appleboy/ssh-action@v1.1.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.PRIVATE_EC2_HOST }}
           username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.PRIVATE_EC2_KEY }}
           script: |
             HEALTH=$(curl -s http://localhost:8084/actuator/health)
             echo "$HEALTH"
