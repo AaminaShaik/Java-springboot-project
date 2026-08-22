@@ -1,0 +1,89 @@
+name: Build and Push Frontend Docker Image to ECR
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "153519860425"
+  ECR_REPOSITORY: frontend
+  IMAGE_TAG: latest
+
+  EC2_NAME: docker
+  CONTAINER_NAME: frontend-container
+  CONTAINER_PORT: 8501
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout source code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Authenticate GitHub Actions with AWS using OIDC
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      # 3. Verify AWS identity
+      - name: Verify AWS Identity
+        run: |
+          aws sts get-caller-identity
+
+      # 4. Login to ECR
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 5. Build and push frontend Docker image
+      - name: Build and Push Frontend Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            ./frontend
+
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # 6. Verify image exists in ECR
+      - name: Verify Frontend Image in ECR
+        run: |
+          aws ecr describe-images \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=$IMAGE_TAG
+
+      # 7. Deploy frontend to private EC2 using SSM
+      - name: Deploy Frontend to Private EC2
+        run: |
+          aws ssm send-command \
+            --targets "Key=tag:Name,Values=$EC2_NAME" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy frontend docker image" \
+            --parameters 'commands=[
+              "aws ecr get-login-password --region '$AWS_REGION' | docker login --username AWS --password-stdin '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com",
+              "docker pull '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'",
+              "docker stop '$CONTAINER_NAME' || true",
+              "docker rm '$CONTAINER_NAME' || true",
+              "docker run -dt --name '$CONTAINER_NAME' -p '$CONTAINER_PORT':'$CONTAINER_PORT' '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'"
+            ]' \
+            --region $AWS_REGION
+
+      # 8. Deployment confirmation
+      - name: Deployment Command Sent
+        run: |
+          echo "Frontend deployment command sent successfully to private EC2."
