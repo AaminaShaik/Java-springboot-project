@@ -16,7 +16,8 @@ env:
   ECR_REPOSITORY: backend
   IMAGE_TAG: latest
 
-  EC2_NAME: backend-ec2
+  # EC2_NAME: backend-ec2
+  EC2_NAME: docker
   CONTAINER_NAME: backend-container
   CONTAINER_PORT: 8084
 
