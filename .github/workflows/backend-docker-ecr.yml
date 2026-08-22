@@ -71,26 +71,46 @@ jobs:
           aws ecr describe-images \
             --repository-name $ECR_REPOSITORY \
             --image-ids imageTag=$IMAGE_TAG
-
-      # 7. Deploy to private EC2 using SSM
       - name: Deploy Backend to Private EC2
         run: |
           aws ssm send-command \
-            --targets "Key=tag:Name,Values=$EC2_NAME" \
-            --document-name "AWS-RunShellScript" \
-            --comment "Deploy backend docker image" \
-            --parameters 'commands=[
-              "docker pull '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'",
-              "docker stop '$CONTAINER_NAME' || true",
-              "docker rm '$CONTAINER_NAME' || true",
-              "rm -f /home/ssm-user/backend.env",
-              "echo SPRING_DATASOURCE_URL=$(aws ssm get-parameter --name '$DB_URL_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
-              "echo SPRING_DATASOURCE_USERNAME=$(aws ssm get-parameter --name '$DB_USERNAME_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
-              "echo SPRING_DATASOURCE_PASSWORD=$(aws ssm get-parameter --name '$DB_PASSWORD_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
-              "chmod 600 /home/ssm-user/backend.env",
-              "docker run -dt --name '$CONTAINER_NAME' --env-file /home/ssm-user/backend.env -p '$CONTAINER_PORT':'$CONTAINER_PORT' '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'"
-            ]' \
-            --region $AWS_REGION
+          --targets "Key=tag:Name,Values=$EC2_NAME" \
+          --document-name "AWS-RunShellScript" \
+          --comment "Deploy backend docker image" \
+          --parameters 'commands=[
+          "aws ecr get-login-password --region '$AWS_REGION' | docker login --username AWS --password-stdin '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com",
+          "docker pull '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'",
+          "docker stop '$CONTAINER_NAME' || true",
+          "docker rm '$CONTAINER_NAME' || true",
+          "rm -f /home/ssm-user/backend.env",
+          "echo SPRING_DATASOURCE_URL=$(aws ssm get-parameter --name '$DB_URL_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
+          "echo SPRING_DATASOURCE_USERNAME=$(aws ssm get-parameter --name '$DB_USERNAME_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
+          "echo SPRING_DATASOURCE_PASSWORD=$(aws ssm get-parameter --name '$DB_PASSWORD_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
+          "chmod 600 /home/ssm-user/backend.env",
+          "docker run -dt --name '$CONTAINER_NAME' --env-file /home/ssm-user/backend.env -p '$CONTAINER_PORT':'$CONTAINER_PORT' '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'"
+          ]' \
+          --region $AWS_REGION      
+
+
+      # # 7. Deploy to private EC2 using SSM
+      # - name: Deploy Backend to Private EC2
+      #   run: |
+      #     aws ssm send-command \
+      #       --targets "Key=tag:Name,Values=$EC2_NAME" \
+      #       --document-name "AWS-RunShellScript" \
+      #       --comment "Deploy backend docker image" \
+      #       --parameters 'commands=[
+      #         "docker pull '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'",
+      #         "docker stop '$CONTAINER_NAME' || true",
+      #         "docker rm '$CONTAINER_NAME' || true",
+      #         "rm -f /home/ssm-user/backend.env",
+      #         "echo SPRING_DATASOURCE_URL=$(aws ssm get-parameter --name '$DB_URL_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
+      #         "echo SPRING_DATASOURCE_USERNAME=$(aws ssm get-parameter --name '$DB_USERNAME_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
+      #         "echo SPRING_DATASOURCE_PASSWORD=$(aws ssm get-parameter --name '$DB_PASSWORD_PARAMETER' --with-decryption --query Parameter.Value --output text --region '$AWS_REGION') >> /home/ssm-user/backend.env",
+      #         "chmod 600 /home/ssm-user/backend.env",
+      #         "docker run -dt --name '$CONTAINER_NAME' --env-file /home/ssm-user/backend.env -p '$CONTAINER_PORT':'$CONTAINER_PORT' '$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPOSITORY':'$IMAGE_TAG'"
+      #       ]' \
+      #       --region $AWS_REGION
 
       # 8. Confirm SSM command was sent
       - name: Deployment Command Sent
